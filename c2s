@@ -1,0 +1,89 @@
+#!/bin/ruby
+
+require 'json'
+require 'pathname'
+require 'yaml'
+
+class StartServiceByCompose
+  def initialize path: path
+    @path = path || "./"
+    Dir.chdir(@path)
+    @path_name = Pathname.new(Dir.pwd).basename
+    @compose = YAML.load_file("docker-compose.yml")
+  end
+
+  def start
+    puts "# Project: #{@path_name}"
+    #beautyful_way 
+    workaround_after
+  end
+ 
+  def beautyful_way
+    puts "# ================="
+    puts "# cd #{@path}"
+    puts "# docker-compose build"
+    puts "# docker-compose push"
+    puts "# docker-compose bundle"
+    puts "# docker deploy #{@path_name}"
+    puts "# ================="
+  end
+
+  def create_networks
+    puts "# Creating networks ..."
+    @compose["networks"] ||= [] 
+    @compose["networks"].each do |name, options|
+      puts "docker network create --driver #{options["driver"]} #{name} "
+    end
+  end
+
+  def create_volumes
+    puts "# Creating volumes ..."
+    @compose["volumes"] ||= []
+    @compose["volumes"].each do |name, options|
+      puts "docker volume create --name #{name} --driver #{options["driver"]}"
+    end
+  end
+
+  def create_services
+    puts "# Creating services ..."
+    @compose["services"] ||= []
+    @compose["services"].each do |name, options|
+      options["volumes"]     ||= []
+      options["ports"]       ||= []
+      options["networks"]    ||= []
+      options["environment"] ||= []
+      networks = options["networks"].map{ |net| "--network #{net}" }.join(" ")
+      volumes = options["volumes"].map do |volume| 
+        source, target = volume.split(":")
+          "--mount type=volume,source=#{source},target=#{target}"
+      end.join(" ") 
+      envs = []
+      unless options["env_file"].nil? 
+        File.open(options["env_file"]).each do |env|
+          envs << env.gsub("\n", "")
+        end
+      end
+      options["environment"].each do |environment|
+        envs << environment.join("=")
+      end
+      puts "docker service create #{envs.map{|env| "--env #{env}"}.join(" ")} #{networks} #{options["ports"].map{|port| "--publish #{port}"}.join(" ")} #{volumes} --name #{@path_name}-#{name} #{options["image"]} #{options["command"]}"
+      puts "sleep 30"
+    end
+  end
+
+  def workaround_after
+    create_networks
+    puts "# ================="
+    create_volumes
+    puts "# ================="
+    create_services
+    puts "# ================="
+  end
+end
+
+StartServiceByCompose.new(path: "./").start if ARGV.empty?
+path_root = File.expand_path(File.dirname(__FILE__))
+ARGV.each do |path|
+  StartServiceByCompose.new(path: path).start
+  Dir.chdir(path_root)
+end

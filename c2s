@@ -52,8 +52,10 @@ class StartServiceByCompose
       options["ports"]       ||= []
       options["networks"]    ||= []
       options["environment"] ||= []
+      options["logging"]     ||= {}
       networks = options["networks"].map{ |net| "--network #{net}" }.join(" ")
-      volumes = options["volumes"].map do |volume| 
+      logging  = "--logdriver #{options["logging"]["driver"]} --log-opt #{options["logging"]["options"].map{|k,v| "#{k}=#{v}"}.join(" ")}" unless options["logging"].empty?
+      volumes  = options["volumes"].map do |volume| 
         source, target = volume.split(":")
           "--mount type=volume,source=#{source},target=#{target}"
       end.join(" ") 
@@ -66,8 +68,7 @@ class StartServiceByCompose
       options["environment"].each do |environment|
         envs << environment.join("=")
       end
-      puts "docker service create #{envs.map{|env| "--env #{env}"}.join(" ")} #{networks} #{options["ports"].map{|port| "--publish #{port}"}.join(" ")} #{volumes} --name #{@path_name}-#{name} #{options["image"]} #{options["command"]}"
-      puts "sleep 30"
+      puts "docker service create #{envs.map{|env| "--env #{env}"}.join(" ")} #{networks} #{logging} #{options["ports"].map{|port| "--publish #{port}"}.join(" ")} #{volumes} --name #{@path_name}-#{name} #{options["image"]} #{options["command"]}"
     end
   end
 
